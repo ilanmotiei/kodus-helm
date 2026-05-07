@@ -228,27 +228,6 @@ See [values.yaml](values.yaml) — heavily commented. Highlights:
 | `extraConfig` / `extraSecrets` / `extraExistingSecrets` / `extraExistingConfigMaps` | Free-form additions / external secret refs |
 | `autoGenerateSecrets` | Auto-generate JWT/crypto secrets and keep them stable across upgrades (default `true`) |
 
-## Gotchas you'll run into anyway
-
-The Kodus codebase has rough edges that aren't the chart's fault but bite users on first install:
-
-1. **Empty events on the GitHub App = silent reviews.** If the App's *Subscribe to events* list is empty (which it is by default after creation), GitHub fires nothing, and Kody's webhook handler stays quiet. See *GitHub setup → Subscribe to events* above.
-
-2. **Severity threshold defaults to `critical`.** First-team-onboarded review config drops anything below critical, so most reviews come back with "no issues found" even when the model spotted real bugs. Lower it via Web UI → Settings → Code Review → Suggestion Control → Severity, or directly in Postgres:
-   ```sql
-   UPDATE parameters
-      SET "configValue" = jsonb_set("configValue",
-                                    '{configs,suggestionControl,severityLevelFilter}',
-                                    '"low"'::jsonb)
-    WHERE "configKey" = 'code_review_config';
-   ```
-
-3. **PAT integration tries to install a webhook on every selected repo.** If your token can read repos you don't admin (org repos), the setup deadlocks with a 404 from GitHub's webhook API. Workarounds: deselect non-admin repos before saving, or use the GitHub App path (`github.app.*`) which doesn't need per-repo webhook creation.
-
-4. **`web` rebuilds Next.js on first start** ([upstream issue #918](https://github.com/kodustech/kodus-ai/issues/918)). On slow CPUs the initial readiness probe times out; the chart sets `web.readinessProbe.failureThreshold: 12`. Bump higher if you still see CrashLoops on the web pod.
-
-5. **api / webhooks may CrashLoopBackOff once at first install** while the worker is still creating AMQP queues. K8s' exponential backoff handles it — pods stabilize within ~1 min. Not a chart bug, an upstream race condition.
-
 ## Render / lint
 
 ```bash
