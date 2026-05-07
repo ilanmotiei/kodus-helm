@@ -18,7 +18,7 @@ helm install kodus kodus/kodus -n kodus --create-namespace -f my-values.yaml
 
 …or pull and install from source (`git clone` then `helm install kodus charts/kodus -f my-values.yaml`).
 
-See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
+See [CHANGELOG.md](CHANGELOG.md) for what changed between versions, and [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) for upstream Kodus quirks the chart compensates for.
 
 ## Quick start
 
@@ -165,6 +165,25 @@ secrets:
 ```
 
 Note the bundled RabbitMQ image has the `rabbitmq_delayed_message_exchange` plugin auto-installed via init-container (Kodus declares an `x-delayed-message` exchange and crashes without it). If you point at external RabbitMQ, **install that plugin yourself** or Kodus will CrashLoop with `unknown exchange type 'x-delayed-message'`.
+
+## MCP integrations
+
+Kody Rules and the reviewer agent can call MCP tools (Sentry, Linear, Jira, etc.) during a review. Memories (`@kody remember: …`) are also implemented as MCP tool calls served by Kodus's own internal MCP server.
+
+```yaml
+mcp:
+  enabled: true                          # spins up mcp-manager + wires every API_MCP_* env var
+  composio:
+    apiKey: ""                           # optional Composio aggregator key
+  providers: kodusmcp,composio,custom    # which provider tabs show in the UI
+```
+
+After `helm upgrade`, finish the setup in **Kodus UI → Settings → Plugins**:
+- **Kodus MCP** — toggle on for memory + repo-introspection tools
+- **Composio** — paste the same key you put in `mcp.composio.apiKey`, then enable individual integrations (Sentry, Linear, Jira, Notion, Slack, …) one at a time
+- **Custom** — paste any external MCP server URL
+
+Heads-up: the per-team activation step is currently the rough edge. See [docs/KNOWN-ISSUES.md §11–§13](docs/KNOWN-ISSUES.md#11-kody-remember-requires-the-in-cluster-mcp-server--per-team-activation) for the open upstream blockers.
 
 ## Bring-your-own secrets (external-secrets / SealedSecrets / Vault)
 

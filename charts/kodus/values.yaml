@@ -132,6 +132,38 @@ github:
 autoGenerateSecrets: true
 
 # -----------------------------------------------------------------------------
+# MCP (Model Context Protocol) — gives the reviewer agent + Kody Rules access
+# to external tools (Sentry, Linear, Jira, your own DB, etc.) and is also the
+# backbone for the @kody-remember/Memories feature (memory creation + lookup
+# are MCP tools served by Kodus's own internal MCP server).
+#
+# Setting `mcp.enabled: true` flips `mcpManager.enabled` and wires every
+# environment variable the api / worker / mcp-manager / web pods need to find
+# each other. Per-team provider activation (Composio API key, custom MCP
+# servers, kodusmcp toggle) is still done through the Kodus UI's Plugins page
+# after install — see KNOWN-ISSUES.md for caveats.
+#
+# Note: `global.publicUrl.web` must be set when `mcp.enabled: true`, since
+# OAuth redirects for Composio go through it.
+# -----------------------------------------------------------------------------
+mcp:
+  enabled: false
+
+  # Composio aggregator. One key gives you Sentry, Linear, Jira, Notion, Slack,
+  # GitHub Issues, Figma, Google Drive, etc. Set `composio.apiKey` and the
+  # available integrations show up in the UI's Plugins page.
+  composio:
+    apiKey: ""
+    baseUrl: "https://backend.composio.dev/api/v3"
+
+  # Available providers exposed to mcp-manager. Reordering / pruning this list
+  # hides categories from the UI's Plugins page.
+  #   kodusmcp  → Kodus's own internal MCP server (memory tools, repo helpers)
+  #   composio  → Composio aggregator (above)
+  #   custom    → "paste any MCP server URL" tab in the UI
+  providers: "kodusmcp,composio,custom"
+
+# -----------------------------------------------------------------------------
 # Application services
 # -----------------------------------------------------------------------------
 api:

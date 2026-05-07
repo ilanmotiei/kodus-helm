@@ -65,8 +65,31 @@ sub-services are enabled, then merges user-supplied .Values.config and
 {{- if and .Values.github.app.enabled .Values.github.app.slug -}}
   {{- $_ := set $gh "WEB_GITHUB_INSTALL_URL" (printf "https://github.com/apps/%s/installations/new" .Values.github.app.slug) -}}
 {{- end -}}
-{{/* Precedence: extraConfig > publicUrl-derived > LLM-derived > GitHub-derived > svc-derived > config defaults */}}
-{{- $merged := merge dict .Values.extraConfig $publicUrl $llm $gh $svc .Values.config -}}
+{{/* MCP helper: when mcp.enabled, populate every env var the api/worker/mcp-manager/web pods need. */}}
+{{- $mcp := dict -}}
+{{- if .Values.mcp.enabled -}}
+  {{- $mgrUrl := printf "http://%s-mcp-manager:%v" (include "kodus.fullname" .) .Values.mcpManager.containerPort -}}
+  {{- $_ := set $mcp "API_MCP_SERVER_ENABLED" "true" -}}
+  {{- $_ := set $mcp "API_KODUS_SERVICE_MCP_MANAGER" $mgrUrl -}}
+  {{- $_ := set $mcp "API_KODUS_MCP_SERVER_URL" (printf "http://%s-api:%v/mcp" (include "kodus.fullname" .) .Values.api.service.port) -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_BACKEND_URL" $mgrUrl -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_PORT" (printf "%v" .Values.mcpManager.containerPort) -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_LOG_LEVEL" "info" -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_NODE_ENV" "production" -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_DATABASE_ENV" "production" -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_CORS_ORIGINS" "*" -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_PG_DB_SCHEMA" "mcp-manager" -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_MCP_PROVIDERS" .Values.mcp.providers -}}
+  {{- $_ := set $mcp "API_MCP_MANAGER_COMPOSIO_BASE_URL" .Values.mcp.composio.baseUrl -}}
+  {{- if $webUrl -}}
+    {{- $_ := set $mcp "API_MCP_MANAGER_REDIRECT_URI" (printf "%s/setup/mcp/oauth" $webUrl) -}}
+    {{- $u := urlParse $webUrl -}}
+    {{- $_ := set $mcp "WEB_HOSTNAME_MCP_MANAGER" $u.host -}}
+    {{- $_ := set $mcp "WEB_PORT_MCP_MANAGER" (ternary "443" "80" (eq $u.scheme "https")) -}}
+  {{- end -}}
+{{- end -}}
+{{/* Precedence: extraConfig > publicUrl > LLM > GitHub > MCP > svc > config defaults */}}
+{{- $merged := merge dict .Values.extraConfig $publicUrl $llm $gh $mcp $svc .Values.config -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

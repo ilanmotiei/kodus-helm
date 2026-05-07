@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-07
+
+### Added
+
+- **`mcp.*` helper.** Single-knob toggle for MCP integrations. `mcp.enabled: true` flips `mcpManager.enabled`, populates every `API_MCP_*` and `WEB_*_MCP_MANAGER` env var the api / worker / mcp-manager / web pods need, derives the OAuth redirect URI from `global.publicUrl.web`, and pipes `mcp.composio.apiKey` into `API_MCP_MANAGER_COMPOSIO_API_KEY`. Per-team provider activation (Composio app picks, custom server URLs, kodusmcp toggle) still happens in the Kodus UI's Plugins page.
+- **`docs/KNOWN-ISSUES.md`** documenting 17 upstream Kodus quirks the chart compensates for: Anthropic-via-`API_OPEN_AI_API_KEY`, default `severityLevelFilter: critical`, GitHub App `Setup URL` requirement, empty `events: []` default on new GitHub Apps, PAT integration deadlock on org repos the user doesn't admin, `web` Next.js rebuild slowness, api/webhooks first-boot CrashLoop while worker creates AMQP queues, RabbitMQ delayed-message-exchange plugin requirement, OpenAI strict-JSON dedup error, `@kody remember:` only-from-inline-comments behavior, MCP setup gotchas (status casing, integration row, EntityMetadata bug), Helm `--reuse-values` carrying forward `--set`, etc.
+
+### Changed
+
+- `mcp-manager` Deployment now renders when either `mcpManager.enabled` or `mcp.enabled` is true. The latter is the new preferred toggle.
+
+[0.2.0]: https://github.com/ilanmotiei/kodus-helm/releases/tag/kodus-0.2.0
+
 ## [0.1.0] - 2026-05-07
 
 First public release. Cloud-generic Helm chart for self-hosting Kodus AI on any Kubernetes cluster (AKS, GKE, EKS, DigitalOcean, k3s, kind, …).
@@ -30,5 +43,5 @@ First public release. Cloud-generic Helm chart for self-hosting Kodus AI on any 
 - The chart is published at `https://ilanmotiei.github.io/kodus-helm` once GitHub Pages is enabled (see [README §Install from the Helm registry](README.md)).
 - `appVersion` is set to `latest` and components default to the `:latest` image tag. Pin via `global.imageTag` (or per-component `image.tag`) for reproducibility.
 
-[Unreleased]: https://github.com/ilanmotiei/kodus-helm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ilanmotiei/kodus-helm/compare/kodus-0.2.0...HEAD
 [0.1.0]: https://github.com/ilanmotiei/kodus-helm/releases/tag/v0.1.0

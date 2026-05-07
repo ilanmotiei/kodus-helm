@@ -1,4 +1,4 @@
-{{- if .Values.mcpManager.enabled }}
+{{- if or .Values.mcpManager.enabled .Values.mcp.enabled }}
 {{ include "kodus.workload" (dict "ctx" . "name" "mcp-manager" "component" .Values.mcpManager "exposes" true) }}
 ---
 {{ include "kodus.workloadService" (dict "ctx" . "name" "mcp-manager" "component" .Values.mcpManager) }}
