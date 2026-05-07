@@ -5,6 +5,55 @@ entries:
       artifacthub.io/category: integration-and-delivery
       artifacthub.io/changes: |
         - kind: added
+          description: "`mcp.*` helper toggles mcpManager.enabled and wires every API_MCP_* / WEB_*_MCP_MANAGER env var the api / worker / mcp-manager / web pods need. One knob to enable MCP integrations (Composio, custom MCP servers, kodusmcp)."
+        - kind: added
+          description: "`mcp.composio.apiKey` value maps to API_MCP_MANAGER_COMPOSIO_API_KEY for the Composio aggregator path."
+        - kind: added
+          description: "docs/KNOWN-ISSUES.md catalogs the upstream Kodus quirks the chart compensates for, so users don't waste time hitting them."
+        - kind: changed
+          description: "mcp-manager Deployment is rendered when either `mcpManager.enabled` or `mcp.enabled` is true (the latter is the new preferred toggle)."
+      artifacthub.io/license: MIT
+      artifacthub.io/links: |
+        - name: Kodus AI source
+          url: https://github.com/kodustech/kodus-ai
+        - name: Kodus AI docs
+          url: https://docs.kodus.io
+        - name: Helm chart source
+          url: https://github.com/ilanmotiei/kodus-helm
+    apiVersion: v2
+    appVersion: latest
+    created: "2026-05-07T18:16:22.756937439Z"
+    description: Kodus AI — self-hosted AI code review platform (api, worker, webhooks,
+      web, optional mcp-manager and AST service) with bundled Postgres/MongoDB/RabbitMQ.
+    digest: 9bc95a753a79c783f41aa6e6c23e96a36d43072fc7fb3f8e06f0b26c5d497cbb
+    home: https://kodus.io
+    icon: https://kodus.io/wp-content/uploads/2025/04/kodusinstaller.png
+    keywords:
+    - kodus
+    - code-review
+    - ai
+    - llm
+    - github
+    - gitlab
+    - claude
+    - gpt
+    - gemini
+    maintainers:
+    - name: ilanmotiei
+      url: https://github.com/ilanmotiei
+    name: kodus
+    sources:
+    - https://github.com/ilanmotiei/kodus-helm
+    - https://github.com/kodustech/kodus-ai
+    - https://github.com/kodustech/kodus-installer
+    type: application
+    urls:
+    - kodus-0.2.0.tgz
+    version: 0.2.0
+  - annotations:
+      artifacthub.io/category: integration-and-delivery
+      artifacthub.io/changes: |
+        - kind: added
           description: First public release of the Kodus AI Helm chart.
         - kind: added
           description: "`llm.*` helper hides Kodus's internal API_OPEN_AI_API_KEY-as-Anthropic-key quirk; supports anthropic, openai, gemini, vertex, openrouter, groq, cerebras, novita, custom, auto."
@@ -58,4 +107,4 @@ entries:
     urls:
     - kodus-0.1.0.tgz
     version: 0.1.0
-generated: "2026-05-07T14:42:27.031481307Z"
+generated: "2026-05-07T18:16:22.756945344Z"
