@@ -1,0 +1,190 @@
+{{- if .Values.rabbitmq.enabled }}
+{{- $name := printf "%s-rabbitmq" (include "kodus.fullname" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-init
+  labels:
+    {{- include "kodus.componentLabels" (dict "ctx" . "component" "rabbitmq") | nindent 4 }}
+data:
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_prometheus{{- if .Values.rabbitmq.delayedMessageExchange.enabled }},rabbitmq_delayed_message_exchange{{- end }}].
+  init-vhosts.sh: |
+    #!/bin/sh
+    set -e
+    rabbitmq-server &
+    server_pid=$!
+    echo "Waiting for RabbitMQ to start..."
+    rabbitmqctl wait --pid "$server_pid" --timeout 60
+    echo "Creating vhosts..."
+    rabbitmqctl add_vhost {{ .Values.rabbitmq.auth.vhost | quote }} || true
+    rabbitmqctl set_permissions -p {{ .Values.rabbitmq.auth.vhost | quote }} "$RABBITMQ_DEFAULT_USER" ".*" ".*" ".*"
+    {{- range .Values.rabbitmq.auth.extraVhosts }}
+    rabbitmqctl add_vhost {{ . | quote }} || true
+    rabbitmqctl set_permissions -p {{ . | quote }} "$RABBITMQ_DEFAULT_USER" ".*" ".*" ".*"
+    {{- end }}
+    echo "Vhosts ready."
+    wait "$server_pid"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "kodus.componentLabels" (dict "ctx" . "component" "rabbitmq") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: amqp
+      port: {{ .Values.rabbitmq.service.amqpPort }}
+      targetPort: amqp
+    - name: management
+      port: {{ .Values.rabbitmq.service.managementPort }}
+      targetPort: management
+    - name: metrics
+      port: {{ .Values.rabbitmq.service.metricsPort }}
+      targetPort: metrics
+  selector:
+    {{- include "kodus.componentSelectorLabels" (dict "ctx" . "component" "rabbitmq") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "kodus.componentLabels" (dict "ctx" . "component" "rabbitmq") | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodus.componentSelectorLabels" (dict "ctx" . "component" "rabbitmq") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodus.componentLabels" (dict "ctx" . "component" "rabbitmq") | nindent 8 }}
+      {{- with .Values.rabbitmq.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.rabbitmq.delayedMessageExchange.enabled }}
+      initContainers:
+        - name: install-delayed-msg-plugin
+          image: curlimages/curl:8.10.1
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              url="{{ .Values.rabbitmq.delayedMessageExchange.url }}"
+              dest=/extra-plugins/rabbitmq_delayed_message_exchange.ez
+              if [ -f "$dest" ]; then
+                echo "Plugin already present, skipping download."
+                exit 0
+              fi
+              echo "Downloading $url -> $dest"
+              curl -fsSL "$url" -o "$dest"
+              ls -l /extra-plugins
+          volumeMounts:
+            - name: extra-plugins
+              mountPath: /extra-plugins
+      {{- end }}
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.rabbitmq.image.repository }}:{{ .Values.rabbitmq.image.tag }}"
+          imagePullPolicy: {{ .Values.rabbitmq.image.pullPolicy }}
+          command: ["/bin/sh", "/etc/rabbitmq/init-vhosts.sh"]
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+            - name: metrics
+              containerPort: 15692
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodus.envSecret" . }}
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodus.envSecret" . }}
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
+              value: "-rabbit heartbeat 60"
+            {{- if .Values.rabbitmq.delayedMessageExchange.enabled }}
+            - name: RABBITMQ_PLUGINS_DIR
+              value: "/opt/rabbitmq/plugins:/extra-plugins"
+            {{- end }}
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "check_running"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+          {{- with .Values.rabbitmq.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+            - name: init
+              mountPath: /etc/rabbitmq/init-vhosts.sh
+              subPath: init-vhosts.sh
+            - name: init
+              mountPath: /etc/rabbitmq/enabled_plugins
+              subPath: enabled_plugins
+            {{- if .Values.rabbitmq.delayedMessageExchange.enabled }}
+            - name: extra-plugins
+              mountPath: /extra-plugins
+            {{- end }}
+      volumes:
+        - name: init
+          configMap:
+            name: {{ $name }}-init
+            defaultMode: 0755
+        {{- if .Values.rabbitmq.delayedMessageExchange.enabled }}
+        - name: extra-plugins
+          emptyDir: {}
+        {{- end }}
+        {{- if not .Values.rabbitmq.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.rabbitmq.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rabbitmq.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.rabbitmq.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.rabbitmq.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.rabbitmq.persistence.size }}
+        {{- if .Values.rabbitmq.persistence.storageClass }}
+        storageClassName: {{ .Values.rabbitmq.persistence.storageClass }}
+        {{- end }}
+  {{- end }}
+{{- end }}

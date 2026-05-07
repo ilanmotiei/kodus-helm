@@ -1,0 +1,15 @@
+# Helm packaging artifacts
+*.tgz
+
+# Local-overlay values files (may contain secrets)
+values.local.yaml
+values.*.local.yaml
+my-values.yaml
+*-values.yaml
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.bak

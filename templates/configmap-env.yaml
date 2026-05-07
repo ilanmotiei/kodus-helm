@@ -1,0 +1,81 @@
+{{- /*
+Shared ConfigMap loaded by every app pod via envFrom. The chart auto-fills
+the in-cluster service hostnames for postgres/mongodb/rabbitmq when those
+sub-services are enabled, then merges user-supplied .Values.config and
+.Values.extraConfig on top so the user can always override.
+*/ -}}
+{{/* Service hostnames auto-filled when bundled stateful services are enabled. */}}
+{{- $svc := dict
+    "API_PG_DB_HOST" (include "kodus.pg.host" .)
+    "API_PG_DB_PORT" (include "kodus.pg.port" .)
+    "API_PG_DB_USERNAME" (include "kodus.pg.username" .)
+    "API_PG_DB_DATABASE" (include "kodus.pg.database" .)
+    "API_MG_DB_HOST" (include "kodus.mg.host" .)
+    "API_MG_DB_PORT" (include "kodus.mg.port" .)
+    "API_MG_DB_USERNAME" (include "kodus.mg.username" .)
+    "API_MG_DB_DATABASE" (include "kodus.mg.database" .)
+    "RABBITMQ_HOSTNAME" (include "kodus.mq.host" .)
+-}}
+{{/* Public-URL helpers: derive NEXTAUTH_URL + webhook URLs from one knob. */}}
+{{- $publicUrl := dict -}}
+{{- $webUrl := default "" .Values.global.publicUrl.web -}}
+{{- $hookUrl := default $webUrl .Values.global.publicUrl.webhooks -}}
+{{- if $webUrl -}}
+  {{- $_ := set $publicUrl "NEXTAUTH_URL" $webUrl -}}
+  {{- $_ := set $publicUrl "API_FRONTEND_URL" $webUrl -}}
+  {{- $_ := set $publicUrl "API_USER_INVITE_BASE_URL" $webUrl -}}
+{{- end -}}
+{{- if $hookUrl -}}
+  {{- $_ := set $publicUrl "API_GITHUB_CODE_MANAGEMENT_WEBHOOK"        (printf "%s/github/webhook"    $hookUrl) -}}
+  {{- $_ := set $publicUrl "API_GITLAB_CODE_MANAGEMENT_WEBHOOK"        (printf "%s/gitlab/webhook"    $hookUrl) -}}
+  {{- $_ := set $publicUrl "GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK"  (printf "%s/bitbucket/webhook" $hookUrl) -}}
+  {{- $_ := set $publicUrl "GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK" (printf "%s/azdevops/webhook" $hookUrl) -}}
+  {{- $_ := set $publicUrl "API_FORGEJO_CODE_MANAGEMENT_WEBHOOK"       (printf "%s/forgejo/webhook"   $hookUrl) -}}
+{{- end -}}
+{{/* LLM helper: translate llm.* into the right Kodus env vars. */}}
+{{- $llm := dict -}}
+{{- $provider := default "auto" .Values.llm.provider -}}
+{{- $model := default "" .Values.llm.model -}}
+{{- $baseUrl := default "" .Values.llm.baseUrl -}}
+{{- if and (ne $provider "auto") $model -}}
+  {{- $_ := set $llm "API_LLM_PROVIDER_MODEL" $model -}}
+  {{- if eq $provider "vertex" -}}
+    {{- if .Values.llm.vertexLocation -}}
+      {{- $_ := set $llm "API_VERTEX_AI_LOCATION" .Values.llm.vertexLocation -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if eq $provider "openai" -}}
+    {{/* No baseUrl override → official OpenAI endpoint. */}}
+    {{- if $baseUrl -}}{{- $_ := set $llm "API_OPENAI_FORCE_BASE_URL" $baseUrl -}}{{- end -}}
+  {{- else if eq $provider "openrouter" -}}
+    {{- $_ := set $llm "API_OPENAI_FORCE_BASE_URL" (default "https://openrouter.ai/api/v1" $baseUrl) -}}
+  {{- else if eq $provider "groq" -}}
+    {{- $_ := set $llm "API_OPENAI_FORCE_BASE_URL" (default "https://api.groq.com/openai/v1" $baseUrl) -}}
+  {{- else if eq $provider "cerebras" -}}
+    {{- $_ := set $llm "API_OPENAI_FORCE_BASE_URL" (default "https://api.cerebras.ai/v1" $baseUrl) -}}
+  {{- else if eq $provider "novita" -}}
+    {{- $_ := set $llm "API_OPENAI_FORCE_BASE_URL" (default "https://api.novita.ai/v3/openai" $baseUrl) -}}
+  {{- else if eq $provider "custom" -}}
+    {{- if not $baseUrl -}}{{ fail "llm.provider=custom requires llm.baseUrl" }}{{- end -}}
+    {{- $_ := set $llm "API_OPENAI_FORCE_BASE_URL" $baseUrl -}}
+  {{- end -}}
+{{- end -}}
+{{/* GitHub helper: derive WEB_GITHUB_INSTALL_URL from app slug. */}}
+{{- $gh := dict -}}
+{{- if and .Values.github.app.enabled .Values.github.app.slug -}}
+  {{- $_ := set $gh "WEB_GITHUB_INSTALL_URL" (printf "https://github.com/apps/%s/installations/new" .Values.github.app.slug) -}}
+{{- end -}}
+{{/* Precedence: extraConfig > publicUrl-derived > LLM-derived > GitHub-derived > svc-derived > config defaults */}}
+{{- $merged := merge dict .Values.extraConfig $publicUrl $llm $gh $svc .Values.config -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kodus.envConfigMap" . }}
+  labels:
+    {{- include "kodus.labels" . | nindent 4 }}
+data:
+{{- range $k, $v := $merged }}
+  {{- if and (ne (printf "%v" $v) "") (not (kindIs "invalid" $v)) }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- end }}

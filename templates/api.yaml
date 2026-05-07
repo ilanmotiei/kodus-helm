@@ -1,0 +1,5 @@
+{{- if .Values.api.enabled }}
+{{ include "kodus.workload" (dict "ctx" . "name" "api" "component" .Values.api "exposes" true) }}
+---
+{{ include "kodus.workloadService" (dict "ctx" . "name" "api" "component" .Values.api) }}
+{{- end }}

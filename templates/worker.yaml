@@ -1,0 +1,3 @@
+{{- if .Values.worker.enabled }}
+{{ include "kodus.workload" (dict "ctx" . "name" "worker" "component" .Values.worker "exposes" false) }}
+{{- end }}

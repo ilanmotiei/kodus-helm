@@ -1,0 +1,633 @@
+# =============================================================================
+# Kodus AI — Helm chart values
+# -----------------------------------------------------------------------------
+# Mirrors the layout of github.com/kodustech/kodus-installer:
+#   * api / worker / webhooks (kodus-ai-api, kodus-ai-worker, kodus-ai-webhook)
+#   * web (kodus-ai-web, Next.js frontend)
+#   * mcp-manager (optional)
+#   * service-ast (optional, AST-based code review)
+#   * Postgres (pgvector), MongoDB, RabbitMQ — toggleable; point to external if you prefer.
+#
+# All env-vars from the installer's .env.example are exposed via two flat maps:
+#   `config`  -> rendered into a ConfigMap (non-secrets)
+#   `secrets` -> rendered into a Secret    (secrets — base64 encoded)
+# Both are loaded into every app pod via envFrom, so any variable you add at
+# the top level applies to api/worker/webhooks/web/mcp-manager/ast.
+# =============================================================================
+
+global:
+  # Container image tag used by every kodus-* image when its `tag` is empty.
+  imageTag: "latest"
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  # Common labels merged into every resource.
+  labels: {}
+
+  # ---------------------------------------------------------------------------
+  # Public URLs. Set these to the externally reachable URLs of the web frontend
+  # and (optionally) the webhook receiver. The chart auto-populates the long
+  # list of NEXTAUTH_URL / API_FRONTEND_URL / API_*_CODE_MANAGEMENT_WEBHOOK
+  # variables from these so you don't have to spell each one out.
+  #
+  # Examples:
+  #   global.publicUrl.web:      https://kodus.example.com
+  #   global.publicUrl.webhooks: https://kodus.example.com   (if same host)
+  #                              https://hooks.kodus.example.com  (if separate)
+  #
+  # Anything you set explicitly under `config.*` overrides these defaults.
+  # ---------------------------------------------------------------------------
+  publicUrl:
+    web: ""        # browser-facing URL of the web frontend
+    webhooks: ""   # public URL of the webhook listener (defaults to web)
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -----------------------------------------------------------------------------
+# LLM provider — single helper that picks the right model/key/baseURL
+# combination for whichever provider you use. Anything under `llm.*` here is
+# translated into the right environment variables for Kodus' code-review
+# agent (which has some non-obvious naming, see comments below).
+#
+# Set exactly one of: anthropic, openai, gemini, vertex, openrouter, custom.
+# `auto` means "let Kodus pick its built-in cloud default" — only useful on
+# Kodus Cloud; on self-hosted you almost always want to set a provider.
+# -----------------------------------------------------------------------------
+llm:
+  # anthropic | openai | gemini | vertex | openrouter | groq | cerebras | novita | morph | custom | auto
+  provider: auto
+
+  # Provider-specific model id.
+  #   anthropic → claude-sonnet-4-5-20250929 (or claude-opus-4-7, etc.)
+  #   openai    → gpt-4o, gpt-5, ...
+  #   gemini    → gemini-2.5-pro, gemini-3.1-pro-preview, ...
+  #   vertex    → same as gemini (uses the GCP service-account JSON in `apiKey`)
+  #   custom    → whatever id your OpenAI-compatible endpoint serves
+  model: ""
+
+  # The provider's API key. For Anthropic, Kodus internally maps this to the
+  # API_OPEN_AI_API_KEY env var (Kodus's Claude branch reuses that variable as
+  # the Anthropic key — yes, this is confusing, no, you don't need to deal
+  # with it directly). For Vertex, paste the base64-encoded service-account
+  # JSON. Leave empty if you'd rather wire keys via the UI's BYOK panel.
+  apiKey: ""
+
+  # Optional. For OpenAI-compatible / proxy endpoints (vLLM, Ollama,
+  # self-hosted OpenRouter, etc.). Leave empty for the provider's official API.
+  baseUrl: ""
+
+  # Vertex-only: GCP region for the model (e.g. us-central1, europe-west1).
+  vertexLocation: ""
+
+# -----------------------------------------------------------------------------
+# GitHub integration — set up once here, the chart wires every env var Kodus
+# needs and computes the Install button URL.
+#
+# You still need to:
+#   1. Create the GitHub OAuth App for sign-in
+#      (https://github.com/settings/applications/new)
+#   2. Create the GitHub App for code review
+#      (https://github.com/settings/apps/new)
+# Both setups need to know your `global.publicUrl.web` so configure that first.
+#
+# After creation, fill the values below and `helm upgrade`. Don't forget to
+# also configure the App's "Setup URL" in GitHub at:
+#   https://github.com/settings/apps/<slug>/permissions  →  Post installation
+#   → Setup URL = <publicUrl.web>/github-integration
+# (this is a one-time GitHub-side step; the chart can't set it for you.)
+# -----------------------------------------------------------------------------
+github:
+  oauth:
+    # OAuth App for sign-in (NextAuth). This is a separate object from the
+    # GitHub App below — see README §"GitHub sign-in" for setup steps.
+    enabled: false
+    clientId: ""
+    clientSecret: ""
+
+  app:
+    # GitHub App for actually reviewing PRs.
+    enabled: false
+    # The App's slug — visible at https://github.com/apps/<slug>. Used to
+    # auto-derive the "Install" URL surfaced in Kodus's UI.
+    slug: ""
+    appId: ""             # numeric App ID
+    clientId: ""          # Iv... or Ov...
+    clientSecret: ""
+    privateKey: ""        # full PEM contents, BEGIN/END lines included
+
+  # Optional Personal Access Token fallback for users who don't want to set up
+  # a GitHub App (e.g. self-hosted GitHub Enterprise where Apps aren't allowed
+  # or for smoke-testing). Sets the GITHUB_TOKEN env var.
+  pat: ""
+
+# Auto-generate stable random secrets when not user-supplied. The chart looks
+# at the existing Secret on `helm upgrade` to keep values stable across runs
+# (so JWTs you've already issued stay valid). Set to `false` if you'd rather
+# manage these via `secrets.*` or `extraExistingSecrets` only.
+autoGenerateSecrets: true
+
+# -----------------------------------------------------------------------------
+# Application services
+# -----------------------------------------------------------------------------
+api:
+  enabled: true
+  image:
+    repository: ghcr.io/kodustech/kodus-ai-api
+    tag: ""        # falls back to global.imageTag
+    pullPolicy: "" # falls back to global.imagePullPolicy
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3001
+  containerPort: 3001
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []           # list of {name, value} or valueFrom blocks
+  extraEnvFrom: []       # list of envFrom entries (configMapRef/secretRef)
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 3001
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 3001
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+worker:
+  enabled: true
+  image:
+    repository: ghcr.io/kodustech/kodus-ai-worker
+    tag: ""
+    pullPolicy: ""
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      memory: 4Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv:
+    # Worker bootstrap requires WORKER_ROLE to be one of "code-review" or "analytics".
+    - name: WORKER_ROLE
+      value: code-review
+    - name: COMPONENT_TYPE
+      value: worker
+  extraEnvFrom: []
+  # Worker has no HTTP listener; rely on default container liveness.
+
+webhooks:
+  enabled: true
+  image:
+    repository: ghcr.io/kodustech/kodus-ai-webhook
+    tag: ""
+    pullPolicy: ""
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3332
+  containerPort: 3332
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  extraEnvFrom: []
+  livenessProbe:
+    tcpSocket:
+      port: 3332
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readinessProbe:
+    tcpSocket:
+      port: 3332
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+web:
+  enabled: true
+  image:
+    repository: ghcr.io/kodustech/kodus-ai-web
+    tag: ""
+    pullPolicy: ""
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3000
+  containerPort: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  extraEnvFrom: []
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 90
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 10
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 12
+
+mcpManager:
+  enabled: false
+  image:
+    repository: ghcr.io/kodustech/kodus-mcp-manager
+    tag: ""
+    pullPolicy: ""
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3101
+  containerPort: 3101
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  extraEnvFrom: []
+
+ast:
+  enabled: true
+  image:
+    repository: ghcr.io/kodustech/kodus-service-ast
+    tag: ""
+    pullPolicy: ""
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3002
+  containerPort: 3002
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  extraEnvFrom: []
+
+# -----------------------------------------------------------------------------
+# Stateful services. Set .enabled=false to use external infrastructure (just
+# point the corresponding host/url config at it via the `config` block).
+# -----------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  image:
+    repository: pgvector/pgvector
+    tag: pg16
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  persistence:
+    enabled: true
+    storageClass: ""    # use cluster default if empty
+    size: 20Gi
+    accessModes: [ReadWriteOnce]
+  # Initial database/credentials; mirrored into the chart's Secret/ConfigMap so
+  # api/worker/webhooks pick them up automatically.
+  auth:
+    username: kodus
+    password: ""        # required when postgresql.enabled=true; auto-filled into Secret
+    database: kodus_db
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+
+mongodb:
+  enabled: true
+  image:
+    repository: mongo
+    tag: "8"
+    pullPolicy: IfNotPresent
+  service:
+    port: 27017
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 20Gi
+    accessModes: [ReadWriteOnce]
+  auth:
+    username: kodus
+    password: ""        # required when mongodb.enabled=true
+    database: kodus
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+
+rabbitmq:
+  enabled: true
+  image:
+    # Default management image. Note: kodus's reference Dockerfile also
+    # installs the rabbitmq_delayed_message_exchange plugin; if you depend
+    # on it, build a custom image (see kodus-installer/docker/rabbitmq) and
+    # set repository/tag here.
+    repository: rabbitmq
+    tag: 4.2.2-management
+    pullPolicy: IfNotPresent
+  service:
+    amqpPort: 5672
+    managementPort: 15672
+    metricsPort: 15692
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 5Gi
+    accessModes: [ReadWriteOnce]
+  auth:
+    username: kodus
+    password: ""        # required when rabbitmq.enabled=true
+    vhost: kodus-ai
+    extraVhosts:
+      - kodus-ast
+  # Kodus declares an `x-delayed-message` exchange, which requires the
+  # rabbitmq_delayed_message_exchange community plugin. The default
+  # rabbitmq:4.2.2-management image does NOT ship it. When enabled, an
+  # initContainer downloads the .ez file into a shared volume and the
+  # broker loads it at startup. Disable if you provide a custom image
+  # that already includes the plugin (e.g. kodus-installer/docker/rabbitmq).
+  delayedMessageExchange:
+    enabled: true
+    url: https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases/download/v4.2.0/rabbitmq_delayed_message_exchange-4.2.0.ez
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Ingress for the web frontend (and optionally the API). Disabled by default.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  tls: []
+  hosts:
+    - host: kodus.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: web        # web | api | webhooks | mcp-manager
+          port: 3000
+
+# -----------------------------------------------------------------------------
+# Shared environment — rendered into a single ConfigMap (config) + Secret
+# (secrets) that every app pod loads via envFrom. Defaults below come from the
+# installer's `.env.example`. Override at install time with --set or a values
+# file. Variables you don't list here can be added to .extraConfig / .extraSecrets.
+# -----------------------------------------------------------------------------
+config:
+  # Environment
+  API_NODE_ENV: production
+  API_DATABASE_ENV: production
+  API_DATABASE_DISABLE_SSL: "true"     # local containers don't use SSL
+  API_LOG_LEVEL: info
+  API_LOG_PRETTY: "false"
+  API_CLOUD_MODE: "false"
+  API_DEVELOPMENT_MODE: "false"
+  RUN_MIGRATIONS: "true"
+  RUN_SEEDS: "true"
+  KODUS_TELEMETRY_DISABLED: "false"
+  RELEASE_VERSION: self-hosted
+
+  # Server
+  API_HOST: 0.0.0.0
+  API_PORT: "3001"
+  API_WEBHOOKS_PORT: "3332"
+  API_RATE_MAX_REQUEST: "100"
+  API_RATE_INTERVAL: "1000"
+  # In-cluster API URL used for server-to-server calls between worker/web/api.
+  # The browser-facing URL is derived from `global.publicUrl.web` (see top of
+  # this file) and bound to API_FRONTEND_URL automatically.
+  API_URL: http://kodus-api:3001
+
+  # Postgres (host/user/db come from the in-cluster service if .Values.postgresql.enabled)
+  API_PG_DB_HOST: ""    # auto-filled in templates if postgresql.enabled
+  API_PG_DB_PORT: "5432"
+  API_PG_DB_USERNAME: ""
+  API_PG_DB_DATABASE: ""
+  API_PG_DB_SSL: "false"
+
+  # MongoDB
+  API_MG_DB_HOST: ""
+  API_MG_DB_PORT: "27017"
+  API_MG_DB_USERNAME: ""
+  API_MG_DB_DATABASE: ""
+  API_MG_DB_AUTH_SOURCE: admin
+
+  # RabbitMQ
+  API_RABBITMQ_ENABLED: "true"
+  API_RABBITMQ_WAIT: "true"
+  RABBITMQ_HOSTNAME: ""
+
+  # Workflow queue tuning
+  WORKFLOW_QUEUE_WORKER_PREFETCH: "20"
+  WORKFLOW_QUEUE_PUBLISHER_PREFETCH: "5"
+  WORKFLOW_QUEUE_WEBHOOK_PREFETCH: "20"
+  WORKFLOW_QUEUE_CODE_REVIEW_PREFETCH: "20"
+  WORKFLOW_QUEUE_WEBHOOK_PROCESS_TIMEOUT_MS: "600000"
+  WORKFLOW_QUEUE_CODE_REVIEW_PROCESS_TIMEOUT_MS: "7200000"
+  WORKFLOW_OUTBOX_MAX_ATTEMPTS: "10"
+  WORKFLOW_QUEUE_HANDLER_TIMEOUT_MS: "60000"
+  WORKFLOW_QUEUE_WORKER_MAX_RETRIES: "3"
+  WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS: "5000"
+
+  # JWT
+  API_JWT_EXPIRES_IN: 365d
+  API_JWT_REFRESH_EXPIRES_IN: 365d
+
+  # LLM provider defaults
+  API_LLM_PROVIDER_MODEL: auto
+  API_GOOGLE_AI_PROVIDER: gemini
+  API_VERTEX_AI_LOCATION: us-central1
+  API_GROQ_BASE_URL: https://api.groq.com/openai/v1
+  API_CEREBRAS_BASE_URL: https://api.cerebras.ai/v1
+
+  # Sandbox
+  SANDBOX_PROVIDER: e2b
+
+  # Cron schedules
+  API_CRON_SYNC_CODE_REVIEW_REACTIONS: "0 0 * * *"
+  API_CRON_KODY_LEARNING: "0 0 * * 6"
+  API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED: "*/2 * * * *"
+  API_CRON_WEEKLY_RECAP: "0 9 * * 5"
+
+  # Web frontend
+  WEB_NODE_ENV: production
+  WEB_HOSTNAME_API: kodus-api      # in-cluster service name (server-side calls)
+  WEB_PORT_API: "3001"
+  WEB_PORT: "3000"
+  # NEXTAUTH_URL is auto-derived from `global.publicUrl.web` when set.
+  # If you don't set publicUrl, override here for local port-forward access.
+  WEB_SUPPORT_DOCS_URL: https://docs.kodus.io
+  WEB_SUPPORT_DISCORD_INVITE_URL: https://discord.gg/QFzwwmNmdN
+
+  # AST + MCP
+  API_ENABLE_CODE_REVIEW_AST: "true"
+  API_SERVICE_AST_URL: http://kodus-ast:3002
+  API_MCP_SERVER_ENABLED: "false"
+
+  # Feature flags
+  API_AGENT_REVIEW_ENABLED: "true"
+  API_WORKER_DRAIN_TIMEOUT_MS: "600000"
+
+# Free-form extra non-secret env vars merged into the ConfigMap.
+extraConfig: {}
+
+# Sensitive variables — rendered into a Kubernetes Secret. Any value left empty
+# here MUST either be filled in by the user (e.g. `--set secrets.API_OPEN_AI_API_KEY=...`)
+# or already exist in `extraExistingSecrets`. Service-credential placeholders
+# (DB_PASSWORD/MQ_PASSWORD/URI) are auto-populated in the templates if the
+# corresponding bundled service is enabled.
+secrets:
+  # Crypto
+  API_JWT_SECRET: ""
+  API_JWT_REFRESH_SECRET: ""
+  API_JWT_REFRESHSECRET: ""        # legacy installer key, kept for compatibility
+  API_CRYPTO_KEY: ""
+  WEB_NEXTAUTH_SECRET: ""
+  NEXTAUTH_SECRET: ""
+  WEB_JWT_SECRET_KEY: ""
+  CODE_MANAGEMENT_SECRET: ""
+  CODE_MANAGEMENT_WEBHOOK_TOKEN: ""
+
+  # LLM provider keys (set whichever you use)
+  API_OPEN_AI_API_KEY: ""
+  API_ANTHROPIC_API_KEY: ""
+  API_GOOGLE_AI_API_KEY: ""
+  GEMINI_API_KEY: ""
+  API_VERTEX_AI_API_KEY: ""
+  API_NOVITA_AI_API_KEY: ""
+  API_GROQ_API_KEY: ""
+  API_CEREBRAS_API_KEY: ""
+  API_OPEN_ROUTER_API_KEY: ""
+  API_MORPHLLM_API_KEY: ""
+  API_EXA_KEY: ""
+  API_E2B_KEY: ""
+
+  # Git providers
+  GLOBAL_GITHUB_CLIENT_ID: ""
+  API_GITHUB_CLIENT_SECRET: ""
+  API_GITHUB_PRIVATE_KEY: ""
+  GITHUB_TOKEN: ""
+  API_GITHUB_APP_ID: ""
+  GLOBAL_GITLAB_CLIENT_ID: ""
+  GLOBAL_GITLAB_CLIENT_SECRET: ""
+  WEB_OAUTH_GITHUB_CLIENT_ID: ""
+  WEB_OAUTH_GITHUB_CLIENT_SECRET: ""
+  WEB_OAUTH_GITLAB_CLIENT_ID: ""
+  WEB_OAUTH_GITLAB_CLIENT_SECRET: ""
+
+  # Observability / SaaS keys
+  LANGFUSE_PUBLIC_KEY: ""
+  LANGFUSE_SECRET_KEY: ""
+  API_BETTERSTACK_DSN: ""
+  API_BETTERSTACK_API_TOKEN: ""
+  API_POSTHOG_KEY: ""
+  WEB_POSTHOG_KEY: ""
+  RESEND_API_KEY: ""
+  API_AWS_USERNAME: ""
+  API_AWS_PASSWORD: ""
+  API_GOOGLE_CLIENT_ID: ""
+  API_GOOGLE_CLIENT_SECRET: ""
+  API_MCP_MANAGER_JWT_SECRET: ""
+  API_MCP_MANAGER_ENCRYPTION_SECRET: ""
+  API_MCP_MANAGER_COMPOSIO_API_KEY: ""
+
+  # Auto-populated when the bundled DB / queue services are enabled. Override
+  # to point at external infrastructure when you set their .enabled=false.
+  API_PG_DB_PASSWORD: ""
+  API_MG_DB_PASSWORD: ""
+  RABBITMQ_DEFAULT_USER: ""
+  RABBITMQ_DEFAULT_PASS: ""
+  API_RABBITMQ_URI: ""
+  DATABASE_URL: ""
+  MONGODB_URI: ""
+
+# Free-form extra secret env vars merged into the Secret.
+extraSecrets: {}
+
+# Extra Kubernetes Secrets to load into every pod via envFrom (e.g. secrets you
+# manage with external-secrets/SealedSecrets). Each entry is a Secret name.
+extraExistingSecrets: []
+
+# Extra Kubernetes ConfigMaps to load into every pod via envFrom.
+extraExistingConfigMaps: []

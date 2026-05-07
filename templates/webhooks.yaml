@@ -1,0 +1,5 @@
+{{- if .Values.webhooks.enabled }}
+{{ include "kodus.workload" (dict "ctx" . "name" "webhooks" "component" .Values.webhooks "exposes" true) }}
+---
+{{ include "kodus.workloadService" (dict "ctx" . "name" "webhooks" "component" .Values.webhooks) }}
+{{- end }}

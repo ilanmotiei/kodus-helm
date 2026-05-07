@@ -1,0 +1,59 @@
+Kodus AI was installed in the {{ .Release.Namespace }} namespace as release "{{ .Release.Name }}".
+
+Components enabled:
+{{- if .Values.api.enabled }}    - api{{- end }}
+{{- if .Values.worker.enabled }}    - worker{{- end }}
+{{- if .Values.webhooks.enabled }}    - webhooks{{- end }}
+{{- if .Values.web.enabled }}    - web{{- end }}
+{{- if .Values.mcpManager.enabled }}    - mcp-manager{{- end }}
+{{- if .Values.ast.enabled }}    - ast{{- end }}
+{{- if .Values.postgresql.enabled }}    - postgres (in-cluster, pgvector){{- end }}
+{{- if .Values.mongodb.enabled }}    - mongodb (in-cluster){{- end }}
+{{- if .Values.rabbitmq.enabled }}    - rabbitmq (in-cluster){{- end }}
+
+Web frontend service:   {{ include "kodus.web.serviceName" . }}.{{ .Release.Namespace }}.svc:{{ .Values.web.service.port }}
+API service:            {{ include "kodus.api.serviceName" . }}.{{ .Release.Namespace }}.svc:{{ .Values.api.service.port }}
+Webhooks service:       {{ include "kodus.webhooks.serviceName" . }}.{{ .Release.Namespace }}.svc:{{ .Values.webhooks.service.port }}
+
+{{- if .Values.ingress.enabled }}
+Ingress hosts:
+{{- range .Values.ingress.hosts }}
+  - {{ .host }}
+{{- end }}
+{{- else }}
+
+No Ingress is configured. To reach the UI from your laptop:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kodus.web.serviceName" . }} 3000:{{ .Values.web.service.port }}
+
+then open http://localhost:3000.
+{{- end }}
+
+REMINDERS
+=========
+
+1. Generate runtime secrets and pass them in. The installer's generate-secrets.sh
+   gives you the right shape:
+
+     openssl rand -base64 32   # API_JWT_SECRET, API_JWT_REFRESH_SECRET, NEXTAUTH_SECRET
+     openssl rand -hex 32      # API_CRYPTO_KEY, CODE_MANAGEMENT_SECRET, API_MCP_MANAGER_ENCRYPTION_SECRET
+
+   Then:
+     helm upgrade {{ .Release.Name }} . \
+       --set secrets.API_JWT_SECRET=... \
+       --set secrets.API_JWT_REFRESH_SECRET=... \
+       --set secrets.API_CRYPTO_KEY=... \
+       --set secrets.WEB_NEXTAUTH_SECRET=... \
+       --set secrets.NEXTAUTH_SECRET=... \
+       --set secrets.CODE_MANAGEMENT_SECRET=...
+
+2. Set NEXTAUTH_URL to whatever URL the browser will hit (your ingress host).
+   Mismatch here = login loops.
+
+3. At least one Git provider webhook (GitHub/GitLab/Bitbucket/Azure/Forgejo) must
+   be configured in `config.API_*_CODE_MANAGEMENT_WEBHOOK` for code review to fire.
+
+4. RabbitMQ: the default image (rabbitmq:4.2.2-management) does NOT include the
+   `rabbitmq_delayed_message_exchange` plugin that kodus-installer's reference
+   image ships. If you depend on it, build a custom image (see
+   kodus-installer/docker/rabbitmq/Dockerfile) and override `rabbitmq.image`.
