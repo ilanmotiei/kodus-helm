@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Kodus AI Helm chart repository</title>
+<style>body{font-family:system-ui;max-width:680px;margin:5em auto;padding:0 1em;line-height:1.6}code{background:#f4f4f4;padding:2px 6px;border-radius:3px}</style>
+<h1>Kodus AI Helm chart repository</h1>
+<p>Add this Helm repo:</p>
+<pre><code>helm repo add kodus https://ilanmotiei.github.io/kodus-helm
+helm repo update</code></pre>
+<p>Then install:</p>
+<pre><code>helm install kodus kodus/kodus -n kodus --create-namespace -f my-values.yaml</code></pre>
+<p>Source &amp; docs: <a href="https://github.com/ilanmotiei/kodus-helm">github.com/ilanmotiei/kodus-helm</a></p>
