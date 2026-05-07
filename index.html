@@ -1,11 +1,234 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Kodus AI Helm chart repository</title>
-<style>body{font-family:system-ui;max-width:680px;margin:5em auto;padding:0 1em;line-height:1.6}code{background:#f4f4f4;padding:2px 6px;border-radius:3px}</style>
-<h1>Kodus AI Helm chart repository</h1>
-<p>Add this Helm repo:</p>
-<pre><code>helm repo add kodus https://ilanmotiei.github.io/kodus-helm
-helm repo update</code></pre>
-<p>Then install:</p>
-<pre><code>helm install kodus kodus/kodus -n kodus --create-namespace -f my-values.yaml</code></pre>
-<p>Source &amp; docs: <a href="https://github.com/ilanmotiei/kodus-helm">github.com/ilanmotiei/kodus-helm</a></p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kodus AI · Helm chart for Kubernetes</title>
+  <meta name="description" content="Cloud-generic Helm chart for self-hosting Kodus AI on any Kubernetes cluster. AKS, GKE, EKS, DigitalOcean, k3s, kind. Multi-provider LLM support, GitHub App helpers, bundled Postgres/MongoDB/RabbitMQ.">
+  <meta property="og:title" content="Kodus AI Helm chart">
+  <meta property="og:description" content="Self-host Kodus AI on Kubernetes. helm repo add kodus https://ilanmotiei.github.io/kodus-helm">
+  <meta property="og:image" content="https://kodus.io/wp-content/uploads/2025/04/kodusinstaller.png">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%93%3C/text%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1f262e;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #c9bbf2;
+      --accent-strong: #a392e6;
+      --code: #1c2128;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --surface: #f6f8fa;
+        --surface-2: #eaeef2;
+        --border: #d0d7de;
+        --text: #1f2328;
+        --text-muted: #59636e;
+        --accent: #6e54d6;
+        --accent-strong: #5039c0;
+        --code: #f6f8fa;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-strong); text-decoration: underline; }
+    h1, h2, h3 { line-height: 1.2; margin: 1.6em 0 0.6em; }
+    h1 { font-size: 2.4rem; margin-top: 0.2em; }
+    h2 { font-size: 1.6rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+    h3 { font-size: 1.15rem; }
+    p { margin: 0.7em 0; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+    code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; }
+    pre { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; overflow-x: auto; line-height: 1.5; }
+    pre code { background: transparent; padding: 0; }
+    hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
+    table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--text-muted); font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78em; font-weight: 600; background: var(--accent); color: #312b4b; vertical-align: middle; margin-left: 6px; }
+    .hero { padding: 72px 0 32px; }
+    .eyebrow { color: var(--accent); font-weight: 600; font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px; }
+    .lede { font-size: 1.18rem; color: var(--text-muted); max-width: 680px; }
+    .cta { display: flex; gap: 12px; flex-wrap: wrap; margin: 28px 0 0; }
+    .cta a {
+      padding: 10px 18px; border-radius: 8px; font-weight: 600; text-decoration: none;
+      border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px;
+      transition: border-color .15s, background .15s;
+    }
+    .cta a.primary { background: var(--accent); color: #312b4b; border-color: var(--accent); }
+    .cta a.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); text-decoration: none; }
+    .cta a:hover { border-color: var(--accent); text-decoration: none; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 1em 0; }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .hero { padding-top: 48px; } h1 { font-size: 2rem; } }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; display: block; color: var(--text); }
+    .card h3 { margin: 0 0 4px; font-size: 1rem; }
+    .card p { margin: 0; color: var(--text-muted); font-size: 0.94em; }
+    a.card:hover { border-color: var(--accent); text-decoration: none; }
+    footer { color: var(--text-muted); font-size: 0.9em; margin: 64px 0 40px; padding-top: 24px; border-top: 1px solid var(--border); }
+    footer a { color: var(--text-muted); text-decoration: underline; }
+    .anchor { color: var(--text-muted); margin-left: 8px; opacity: 0; }
+    h2:hover .anchor, h3:hover .anchor { opacity: 1; }
+    .note { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 4px; margin: 1.4em 0; color: var(--text-muted); font-size: 0.95em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="hero">
+      <div class="eyebrow">Helm chart · v0.1.0</div>
+      <h1>Kodus AI on Kubernetes</h1>
+      <p class="lede">
+        Self-host the open-source AI code-review platform on any Kubernetes cluster. AKS, GKE, EKS, DigitalOcean, k3s, kind — one Helm release, no docker-compose, no manual env-var spelunking.
+      </p>
+      <div class="cta">
+        <a class="primary" href="https://github.com/ilanmotiei/kodus-helm">GitHub repo →</a>
+        <a href="https://github.com/ilanmotiei/kodus-helm#readme">Full README</a>
+        <a href="https://github.com/ilanmotiei/kodus-helm/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://artifacthub.io/packages/search?repo=kodus">Artifact Hub</a>
+        <a href="https://github.com/kodustech/kodus-ai">Kodus AI source ↗</a>
+      </div>
+    </header>
+
+    <h2 id="install">Install <a href="#install" class="anchor">#</a></h2>
+    <pre><code>helm repo add kodus https://ilanmotiei.github.io/kodus-helm
+helm repo update
+helm install kodus kodus/kodus -n kodus --create-namespace -f my-values.yaml</code></pre>
+    <p>JWT/crypto secrets auto-generate on first install and stay stable across <code>helm upgrade</code> — sessions don't get invalidated when you bump the chart.</p>
+
+    <h2 id="minimal">Minimal <code>my-values.yaml</code> <a href="#minimal" class="anchor">#</a></h2>
+    <pre><code>global:
+  publicUrl:
+    web: https://kodus.example.com   # the URL the browser will hit (matches your Ingress host)
+
+llm:
+  provider: anthropic                # or openai | gemini | vertex | openrouter | groq | cerebras | novita | custom
+  model:    claude-sonnet-4-5-20250929
+  apiKey:   sk-ant-...
+
+github:
+  oauth:
+    enabled: true
+    clientId:     Ov23li...
+    clientSecret: ghs_...
+  app:
+    enabled: true
+    slug:         kodus-myorg        # auto-builds the "Install App" button URL
+    appId:        "1234567"
+    clientId:     Iv23li...
+    clientSecret: ghs_...
+    privateKey: |
+      -----BEGIN RSA PRIVATE KEY-----
+      ...
+      -----END RSA PRIVATE KEY-----
+
+postgresql: { auth: { password: pickAStrongPassword1 } }
+mongodb:    { auth: { password: pickAStrongPassword2 } }
+rabbitmq:   { auth: { password: pickAStrongPassword3 } }
+
+ingress:
+  enabled:   true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - { hosts: [kodus.example.com], secretName: kodus-tls }
+  hosts:
+    - host: kodus.example.com
+      paths:
+        - { path: /github/webhook,    pathType: Prefix, service: webhooks, port: 3332 }
+        - { path: /gitlab/webhook,    pathType: Prefix, service: webhooks, port: 3332 }
+        - { path: /bitbucket/webhook, pathType: Prefix, service: webhooks, port: 3332 }
+        - { path: /azdevops/webhook,  pathType: Prefix, service: webhooks, port: 3332 }
+        - { path: /forgejo/webhook,   pathType: Prefix, service: webhooks, port: 3332 }
+        - { path: /,                  pathType: Prefix, service: web,      port: 3000 }</code></pre>
+
+    <h2 id="bundled">What's bundled <a href="#bundled" class="anchor">#</a></h2>
+    <div class="grid">
+      <div class="card"><h3>api · worker · webhooks · web</h3><p>Four Deployments straight from the upstream Docker Compose, plus optional <code>mcp-manager</code> and <code>ast</code> services.</p></div>
+      <div class="card"><h3>Postgres (pgvector) · MongoDB · RabbitMQ</h3><p>StatefulSets with PVCs. Toggleable — flip <code>.enabled: false</code> to point at managed services.</p></div>
+      <div class="card"><h3>RabbitMQ delayed-message plugin</h3><p>Auto-installed via init-container. Without it, every PR review crashes with <code>unknown exchange type 'x-delayed-message'</code>.</p></div>
+      <div class="card"><h3>wait-for-deps init containers</h3><p>App pods don't CrashLoop on startup races. They <code>nc</code>-poll Postgres/MongoDB/RabbitMQ before booting.</p></div>
+      <div class="card"><h3>Auto-generated, stable secrets</h3><p>JWT, crypto, NextAuth — generated with <code>randAlphaNum</code> on first install, kept across upgrades via Helm's <code>lookup</code>.</p></div>
+      <div class="card"><h3>Ingress + cert-manager</h3><p>Multi-host recipes in the README. Single-host with path routing or split-host (separate webhook domain) — both work.</p></div>
+    </div>
+
+    <h2 id="helpers">Helpers that hide Kodus's quirks <a href="#helpers" class="anchor">#</a></h2>
+    <p>Self-hosting Kodus by hand requires reading source code. Each gotcha has a chart helper:</p>
+    <table>
+      <tr><th>You set</th><th>Chart wires</th></tr>
+      <tr><td><code>global.publicUrl.web</code></td><td><code>NEXTAUTH_URL</code>, <code>API_FRONTEND_URL</code>, <code>API_USER_INVITE_BASE_URL</code></td></tr>
+      <tr><td><code>global.publicUrl.webhooks</code></td><td><code>API_GITHUB_CODE_MANAGEMENT_WEBHOOK</code> + the same for GitLab, Bitbucket, Azure Repos, Forgejo</td></tr>
+      <tr><td><code>llm.provider: anthropic</code> + <code>llm.apiKey</code></td><td><code>API_OPEN_AI_API_KEY</code> <span class="badge">yes really</span> + <code>API_ANTHROPIC_API_KEY</code><br><span style="color:var(--text-muted);font-size:0.9em">Kodus's source overloads <code>API_OPEN_AI_API_KEY</code> as the Anthropic key when the model name starts with <code>claude-</code>. The chart maps <code>llm.apiKey</code> to whichever variable Kodus actually reads.</span></td></tr>
+      <tr><td><code>llm.provider: openrouter | groq | cerebras | novita</code></td><td><code>API_OPEN_AI_API_KEY</code> + <code>API_OPENAI_FORCE_BASE_URL</code> set to the right endpoint</td></tr>
+      <tr><td><code>llm.provider: gemini</code></td><td><code>API_GOOGLE_AI_API_KEY</code> + <code>GEMINI_API_KEY</code></td></tr>
+      <tr><td><code>llm.provider: vertex</code></td><td><code>API_VERTEX_AI_API_KEY</code> (base64 SA JSON) + <code>API_VERTEX_AI_LOCATION</code></td></tr>
+      <tr><td><code>github.app.slug: kodus-myorg</code></td><td><code>WEB_GITHUB_INSTALL_URL=https://github.com/apps/kodus-myorg/installations/new</code></td></tr>
+      <tr><td><code>github.app.{appId,clientId,clientSecret,privateKey}</code></td><td><code>API_GITHUB_APP_ID</code>, <code>GLOBAL_GITHUB_CLIENT_ID</code>, <code>API_GITHUB_CLIENT_SECRET</code>, <code>API_GITHUB_PRIVATE_KEY</code></td></tr>
+      <tr><td><code>github.oauth.{clientId,clientSecret}</code></td><td><code>WEB_OAUTH_GITHUB_CLIENT_ID</code> / <code>_SECRET</code></td></tr>
+      <tr><td><code>github.pat</code></td><td><code>GITHUB_TOKEN</code> (PAT fallback for GitHub Enterprise)</td></tr>
+    </table>
+
+    <h2 id="external">Bring-your-own infrastructure <a href="#external" class="anchor">#</a></h2>
+    <p>Disable bundled stateful services and supply external connection details:</p>
+    <pre><code>postgresql: { enabled: false }
+mongodb:    { enabled: false }
+rabbitmq:   { enabled: false }
+
+config:
+  API_PG_DB_HOST:    pg.example.com
+  API_PG_DB_USERNAME: kodus
+  API_PG_DB_DATABASE: kodus_db
+  API_MG_DB_HOST:    mongo.example.com
+  API_MG_DB_USERNAME: kodus
+  API_MG_DB_DATABASE: kodus
+  RABBITMQ_HOSTNAME: rabbit.example.com
+
+secrets:
+  API_PG_DB_PASSWORD: ...
+  API_MG_DB_PASSWORD: ...
+  API_RABBITMQ_URI:   amqp://user:pass@rabbit.example.com:5672/kodus-ai</code></pre>
+    <div class="note">If you point at an external RabbitMQ, install the <code>rabbitmq_delayed_message_exchange</code> plugin yourself. Kodus declares an <code>x-delayed-message</code> exchange and CrashLoops without it.</div>
+
+    <h2 id="extsecrets">External secret managers <a href="#extsecrets" class="anchor">#</a></h2>
+    <p>Works with external-secrets, SealedSecrets, Vault, etc.:</p>
+    <pre><code>extraExistingSecrets:
+  - kodus-llm-keys
+  - kodus-git-creds
+extraExistingConfigMaps:
+  - kodus-extra-env</code></pre>
+    <p>Each entry is loaded into every Kodus pod via <code>envFrom</code>, alongside the chart-managed Secret/ConfigMap.</p>
+
+    <h2 id="links">More <a href="#links" class="anchor">#</a></h2>
+    <div class="grid">
+      <a class="card" href="https://github.com/ilanmotiei/kodus-helm#readme"><h3>Full README →</h3><p>Every value, every recipe, every Ingress example.</p></a>
+      <a class="card" href="https://github.com/ilanmotiei/kodus-helm/blob/main/charts/kodus/values.yaml"><h3>values.yaml →</h3><p>Heavily commented; the source of truth for what's configurable.</p></a>
+      <a class="card" href="https://github.com/ilanmotiei/kodus-helm/blob/main/CHANGELOG.md"><h3>Changelog →</h3><p>Version-by-version, in Keep-a-Changelog format.</p></a>
+      <a class="card" href="https://github.com/ilanmotiei/kodus-helm/issues"><h3>Issues / contributions →</h3><p>Bug reports, feature requests, PRs welcome.</p></a>
+      <a class="card" href="https://github.com/kodustech/kodus-ai"><h3>Kodus AI source ↗</h3><p>The application this chart packages.</p></a>
+      <a class="card" href="https://docs.kodus.io"><h3>Kodus docs ↗</h3><p>How Kody Rules, Memories, and Reinforcement Learning work after install.</p></a>
+    </div>
+
+    <hr>
+
+    <footer>
+      <p>Community-maintained chart, not affiliated with Kodus AI. Licensed under <a href="https://github.com/ilanmotiei/kodus-helm/blob/main/LICENSE">MIT</a>; the Kodus AI software it packages is dual-licensed by <a href="https://github.com/kodustech/kodus-ai/blob/main/license.md">kodustech</a>.</p>
+    </footer>
+
+  </div>
+</body>
+</html>
