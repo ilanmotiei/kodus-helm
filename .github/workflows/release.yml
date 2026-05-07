@@ -1,0 +1,50 @@
+# Releases the chart to a Helm repo served from GitHub Pages.
+#
+# Trigger: push to `main`. The chart-releaser-action reads charts/<name>/Chart.yaml,
+# packages anything whose `version` is new (i.e. doesn't already have a matching
+# GitHub release), creates a release with the .tgz attached, and updates
+# index.yaml on the gh-pages branch.
+#
+# After the first run, enable GitHub Pages at:
+#   Settings → Pages → Source = "Deploy from a branch" → branch = gh-pages, folder = /
+# Then `helm repo add kodus https://ilanmotiei.github.io/kodus-helm` works.
+
+name: Release Helm chart
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create GitHub releases + push gh-pages
+  pages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: charts
+          mark_as_latest: true
+          packages_with_index: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

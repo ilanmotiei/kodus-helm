@@ -1,0 +1,11 @@
+# Artifact Hub repository metadata. Read by Artifact Hub when this repo is
+# registered at https://artifacthub.io/control-panel/repositories.
+#
+# After enabling GitHub Pages on this repo (gh-pages branch), register it
+# at Artifact Hub with:
+#   URL  = https://ilanmotiei.github.io/kodus-helm
+#   Kind = Helm
+repositoryID: ""
+owners:
+  - name: ilanmotiei
+    email: ilanmotiei1@gmail.com

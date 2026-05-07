@@ -1,0 +1,52 @@
+apiVersion: v2
+name: kodus
+description: Kodus AI — self-hosted AI code review platform (api, worker, webhooks, web, optional mcp-manager and AST service) with bundled Postgres/MongoDB/RabbitMQ.
+type: application
+version: 0.1.0
+appVersion: "latest"
+icon: https://kodus.io/wp-content/uploads/2025/04/kodusinstaller.png
+home: https://kodus.io
+sources:
+  - https://github.com/ilanmotiei/kodus-helm
+  - https://github.com/kodustech/kodus-ai
+  - https://github.com/kodustech/kodus-installer
+keywords:
+  - kodus
+  - code-review
+  - ai
+  - llm
+  - github
+  - gitlab
+  - claude
+  - gpt
+  - gemini
+maintainers:
+  - name: ilanmotiei
+    url: https://github.com/ilanmotiei
+annotations:
+  artifacthub.io/category: integration-and-delivery
+  artifacthub.io/license: MIT
+  artifacthub.io/links: |
+    - name: Kodus AI source
+      url: https://github.com/kodustech/kodus-ai
+    - name: Kodus AI docs
+      url: https://docs.kodus.io
+    - name: Helm chart source
+      url: https://github.com/ilanmotiei/kodus-helm
+  artifacthub.io/changes: |
+    - kind: added
+      description: First public release of the Kodus AI Helm chart.
+    - kind: added
+      description: "`llm.*` helper hides Kodus's internal API_OPEN_AI_API_KEY-as-Anthropic-key quirk; supports anthropic, openai, gemini, vertex, openrouter, groq, cerebras, novita, custom, auto."
+    - kind: added
+      description: "`github.{oauth,app,pat}` helpers auto-derive WEB_GITHUB_INSTALL_URL and map credentials to the right env vars."
+    - kind: added
+      description: "`global.publicUrl.{web,webhooks}` auto-fills NEXTAUTH_URL plus all 5 Git provider webhook URLs."
+    - kind: added
+      description: Bundled RabbitMQ image gets the rabbitmq_delayed_message_exchange plugin auto-installed via init container.
+    - kind: added
+      description: wait-for-deps init containers prevent app pods from CrashLooping while Postgres/Mongo/RabbitMQ are still booting.
+    - kind: added
+      description: Auto-generated stable JWT/crypto secrets (uses Helm's lookup to keep values stable across upgrades).
+    - kind: added
+      description: Multi-host Ingress with cert-manager TLS recipe in README.

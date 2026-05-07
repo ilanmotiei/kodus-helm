@@ -1,10 +1,24 @@
 # Kodus AI — Helm Chart
 
+[![Release Helm chart](https://github.com/ilanmotiei/kodus-helm/actions/workflows/release.yml/badge.svg)](https://github.com/ilanmotiei/kodus-helm/actions/workflows/release.yml) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Self-hosted [Kodus AI](https://kodus.io) on any Kubernetes cluster (AKS, GKE, EKS, DigitalOcean, k3s, kind, …). One Helm release brings up the full stack:
 
 - **api / worker / webhooks / web** — application
 - **mcp-manager** *(optional)*, **ast** *(optional)* — code-review augmentations
 - **postgres** (`pgvector`), **mongo:8**, **rabbitmq:4.2.2-management** — bundled, toggleable; point at external services if you prefer
+
+## Install from the Helm registry
+
+```bash
+helm repo add kodus https://ilanmotiei.github.io/kodus-helm
+helm repo update
+helm install kodus kodus/kodus -n kodus --create-namespace -f my-values.yaml
+```
+
+…or pull and install from source (`git clone` then `helm install kodus charts/kodus -f my-values.yaml`).
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
 
 ## Quick start
 
@@ -63,7 +77,7 @@ ingress:
 ```
 
 ```bash
-helm install kodus . -n kodus --create-namespace -f my-values.yaml
+helm install kodus kodus/kodus -n kodus --create-namespace -f my-values.yaml
 ```
 
 JWT/crypto secrets are auto-generated and remain stable across `helm upgrade` (the chart looks up the existing Secret to keep them).
@@ -214,7 +228,7 @@ ingress:
 
 ## Reference: every value you can set
 
-See [values.yaml](values.yaml) — heavily commented. Highlights:
+See [charts/kodus/values.yaml](charts/kodus/values.yaml) — heavily commented. Highlights:
 
 | Block | What it controls |
 |---|---|
@@ -231,31 +245,45 @@ See [values.yaml](values.yaml) — heavily commented. Highlights:
 ## Render / lint
 
 ```bash
-helm lint .
-helm template kodus . -f my-values.yaml --debug
+helm lint charts/kodus
+helm template kodus charts/kodus -f my-values.yaml --debug
 ```
 
 ## Layout
 
 ```
 .
-├── Chart.yaml
-├── values.yaml
+├── CHANGELOG.md
+├── LICENSE
 ├── README.md
-└── templates/
-    ├── _helpers.tpl
-    ├── _workload.tpl          # shared Deployment + Service renderer
-    ├── NOTES.txt
-    ├── configmap-env.yaml     # non-secret env vars (auto-derives from publicUrl + llm + github)
-    ├── secret-env.yaml        # secret env vars (auto-derives crypto keys, llm.apiKey, github.*)
-    ├── api.yaml worker.yaml webhooks.yaml web.yaml mcp-manager.yaml ast.yaml
-    ├── postgres.yaml          # StatefulSet + Service + pgvector init
-    ├── mongodb.yaml           # StatefulSet + Service
-    ├── rabbitmq.yaml          # StatefulSet + Service + delayed-msg plugin init-container
-    ├── ingress.yaml
-    └── serviceaccount.yaml
+├── artifacthub-repo.yml          # Artifact Hub repo metadata
+├── .github/workflows/release.yml # publishes to gh-pages on every push to main
+└── charts/kodus/
+    ├── Chart.yaml
+    ├── values.yaml
+    └── templates/
+        ├── _helpers.tpl
+        ├── _workload.tpl          # shared Deployment + Service renderer
+        ├── NOTES.txt
+        ├── configmap-env.yaml     # non-secret env vars (auto-derives from publicUrl + llm + github)
+        ├── secret-env.yaml        # secret env vars (auto-derives crypto keys, llm.apiKey, github.*)
+        ├── api.yaml, worker.yaml, webhooks.yaml, web.yaml, mcp-manager.yaml, ast.yaml
+        ├── postgres.yaml          # StatefulSet + Service + pgvector init
+        ├── mongodb.yaml           # StatefulSet + Service
+        ├── rabbitmq.yaml          # StatefulSet + Service + delayed-msg plugin init-container
+        ├── ingress.yaml
+        └── serviceaccount.yaml
 ```
+
+## Releasing
+
+This repo uses [chart-releaser-action](https://github.com/helm/chart-releaser-action). To cut a new chart release:
+
+1. Bump `version:` in [charts/kodus/Chart.yaml](charts/kodus/Chart.yaml) (semver — patch for chart-only fixes, minor for new values, major for breaking).
+2. Add a section to [CHANGELOG.md](CHANGELOG.md).
+3. Update the `artifacthub.io/changes` annotation block at the bottom of `Chart.yaml` so Artifact Hub shows the changelog on the package page.
+4. Push to `main`. The release workflow packages the chart, creates a GitHub release with the `.tgz` attached, and updates `index.yaml` on the `gh-pages` branch.
 
 ## License
 
-MIT for the chart. Kodus itself is dual-licensed — see [kodustech/kodus-ai](https://github.com/kodustech/kodus-ai/blob/main/license.md).
+MIT for the chart — see [LICENSE](LICENSE). Kodus itself is dual-licensed; see [kodustech/kodus-ai](https://github.com/kodustech/kodus-ai/blob/main/license.md).
